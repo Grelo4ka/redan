@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>ReDAN: Remote DoS Attacks against NAT Networks</title>
+
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reset.min.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.css">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/theme/league.min.css">
+
+		<!-- Theme used for syntax highlighting of code -->
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/highlight/monokai.min.css">
+        
+        <style>
+            .highlight { color: #e74c3c; font-weight: bold; }
+            .success { color: #2ecc71; font-weight: bold; }
+            .info-box { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; font-size: 0.8em; }
+            small { font-size: 0.6em !important; }
+        </style>
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+
+                <!-- Slide 1: Title -->
+				<section>
+					<h3>ReDAN: An Empirical Study on Remote DoS Attacks against NAT Networks</h3>
+					<p style="font-size: 0.8em;">NDSS Symposium 2025</p>
+					<hr>
+					<p style="font-size: 0.6em;">
+						Presented by: [Your Name]<br>
+						Original Authors: Xuewei Feng, Yuxiang Yang, Qi Li, et al.
+					</p>
+				</section>
+
+                <!-- Slide 2: Introduction -->
+				<section>
+					<h2>What is NAT?</h2>
+					<ul>
+						<li class="fragment"><strong>Network Address Translation:</strong> Maps private IP addresses to a single public IP.</li>
+						<li class="fragment">Used in 4G/5G, public Wi-Fi, Cloud VPS, and IoT.</li>
+						<li class="fragment">Commonly believed to <span class="success">enhance security</span> by concealing internal hosts.</li>
+						<li class="fragment"><span class="highlight">The Reality:</span> Vulnerabilities in NAT implementations allow remote attackers to disrupt connectivity.</li>
+					</ul>
+				</section>
+
+                <!-- Slide 3: The ReDAN Attack Overview -->
+				<section>
+					<h2>ReDAN Overview</h2>
+					<p><strong>Re</strong>mote <strong>D</strong>oS <strong>A</strong>ttacks targeting <strong>N</strong>AT</p>
+					<div class="info-box">
+						<ol>
+							<li class="fragment"><strong>Identification:</strong> Distinguish if a public IP belongs to a NAT device or a single host using a PMTUD side-channel.</li>
+							<li class="fragment"><strong>Termination:</strong> Remotely sever active TCP connections by manipulating NAT session mappings.</li>
+						</ol>
+					</div>
+					<p class="fragment" style="font-size: 0.7em;"><em>Key Discovery: Over 92% of real-world NAT networks tested were vulnerable.</em></p>
+				</section>
+
+                <!-- Slide 4: Background - PMTUD -->
+				<section>
+					<h2>Background: PMTUD</h2>
+					<ul>
+						<li><strong>Path MTU Discovery (PMTUD):</strong> Determines the largest packet size allowed on a network path without fragmentation.</li>
+						<li>If a packet is too large, a router sends an <span class="highlight">ICMP "Fragmentation Needed"</span> message.</li>
+						<li>The host then reduces its packet size for that destination.</li>
+					</ul>
+				</section>
+
+                <!-- Slide 5: Step 1 - Identifying NAT Devices -->
+				<section>
+					<h3>Step 1: Identifying NAT</h3>
+					<p style="font-size: 0.8em;">Exploiting PMTUD Desynchronization</p>
+					<ul>
+						<li class="fragment">The attacker's Vantage Point (VP) tricks a client into lowering its MTU.</li>
+						<li class="fragment">The VP then sends an ICMP Echo (Ping) to the public IP.</li>
+						<li class="fragment"><strong>Separate Host:</strong> Responds with <span class="highlight">fragmented</span> packets (matches its new MTU).</li>
+						<li class="fragment"><strong>NAT Device:</strong> Responds with a <span class="success">standard 1500-byte</span> packet (the gateway's MTU remains unchanged).</li>
+					</ul>
+					<p class="fragment info-box">This side channel allows attackers to pinpoint NAT gateways on the Internet.</p>
+				</section>
+
+                <!-- Slide 6: Step 2 - Conducting the DoS -->
+				<section>
+					<h3>Step 2: Severing Connections</h3>
+					<p style="font-size: 0.7em;">Exploiting the lack of RST packet validation</p>
+					<ol>
+						<li class="fragment"><strong>Remove Mappings:</strong> Attacker sends crafted TCP RST packets with <em>guessed</em> ports to the NAT device.</li>
+						<li class="fragment"><strong>Deception:</strong> Many NAT devices remove the session mapping without checking if the sequence number is valid.</li>
+						<li class="fragment"><strong>State Manipulation:</strong> Attacker sends PUSH/ACK packets to the server, causing the server to send valid RSTs to the client.</li>
+						<li class="fragment"><strong>Result:</strong> Connectivity is lost even if the internal client's stack is secure!</li>
+					</ol>
+				</section>
+
+                <!-- Slide 7: Experimental Results - Vulnerabilities -->
+				<section>
+					<h3>Widespread Vulnerability</h3>
+					<table style="font-size: 0.6em;">
+						<thead>
+							<tr>
+								<th>Target Type</th>
+								<th>Tested</th>
+								<th>Vulnerable</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr>
+								<td>Router Firmware (OpenWrt, etc.)</td>
+								<td>8 types</td>
+								<td>6 (75%)</td>
+							</tr>
+							<tr>
+								<td>Commercial NAT Devices</td>
+								<td>30 models</td>
+								<td>29 (96.7%)</td>
+							</tr>
+							<tr>
+								<td>Real-world NAT Networks</td>
+								<td>180</td>
+								<td>166 (92.2%)</td>
+							</tr>
+						</tbody>
+					</table>
+					<div class="fragment info-box" style="margin-top: 20px;">
+						Affected Vendors: NETGEAR, Linksys, Huawei, TP-Link, Xiaomi, Cisco Meraki, etc.
+					</div>
+				</section>
+
+                <!-- Slide 8: Real-World Impact -->
+				<section>
+					<h3>Impact on Real Networks</h3>
+					<ul>
+						<li class="fragment"><strong>4G LTE/5G:</strong> 100% of tested 4G and 100% of 5G networks were vulnerable.</li>
+						<li class="fragment"><strong>Public Wi-Fi:</strong> ~80-87% vulnerability rate across Wi-Fi 4, 5, and 6.</li>
+						<li class="fragment"><strong>Cloud Networks:</strong> Vulnerabilities found in ALICLOUD, HUAWEI CLOUDS, and Tencent Cloud.</li>
+						<li class="fragment"><strong>Attack Bandwidth:</strong> Only <span class="highlight">~5.7 Mbps</span> is needed to block all SSH/FTP traffic for a NAT network.</li>
+					</ul>
+				</section>
+
+                <!-- Slide 9: Ethical Considerations -->
+				<section>
+					<h2>Ethical Considerations</h2>
+					<ul>
+						<li><strong>User Consent:</strong> Vantage points obtained user approval before identification.</li>
+						<li><strong>Non-Intrusive:</strong> Experiments only targeted the researchers' own controlled connections.</li>
+						<li><strong>Responsible Disclosure:</strong> Vulnerabilities reported to IETF and affected vendors (Apple, Microsoft, Linux, etc.).</li>
+						<li><strong>CVEs:</strong> 5 identifiers obtained (e.g., CVE-2023-6534).</li>
+					</ul>
+				</section>
+
+                <!-- Slide 10: Countermeasures -->
+				<section>
+					<h2>Countermeasures</h2>
+					<div class="fragment">
+						<h4>1. Fix PMTUD Side Channel</h4>
+						<p style="font-size: 0.8em;">NAT devices should synchronize PMTU values with internal clients to prevent information leakage.</p>
+					</div>
+					<div class="fragment">
+						<h4>2. Strict TCP Validation</h4>
+						<p style="font-size: 0.8em;">Enforce sequence number checking for RST packets before removing NAT mappings.</p>
+					</div>
+					<p class="fragment success">Prototype on OpenWrt 22.03 confirmed these fixes work!</p>
+				</section>
+
+                <!-- Slide 11: Conclusion -->
+				<section>
+					<h2>Conclusion</h2>
+					<ul>
+						<li class="fragment">NAT is not a "security silver bullet."</li>
+						<li class="fragment">ReDAN exploits fundamental flaws in NAT specifications (PMTUD).</li>
+						<li class="fragment">Attackers can remotely identify and disable entire networks with minimal bandwidth.</li>
+						<li class="fragment">Critical need for updated NAT standards and stricter packet validation.</li>
+					</ul>
+				</section>
+
+                <!-- Slide 12: Q&A -->
+				<section>
+					<h1>Thank You!</h1>
+					<p>Questions?</p>
+					<br>
+					<p style="font-size: 0.5em;">Paper: "ReDAN: An Empirical Study on Remote DoS Attacks against NAT Networks"</p>
+				</section>
+
+			</div>
+		</div>
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/notes/notes.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/markdown/markdown.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/highlight/highlight.min.js"></script>
+		<script>
+			Reveal.initialize({
+				hash: true,
+				plugins: [ RevealMarkdown, RevealHighlight, RevealNotes ]
+			});
+		</script>
+	</body>
+</html>
