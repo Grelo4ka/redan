@@ -8,16 +8,18 @@
 
 		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reset.min.css">
 		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.min.css">
-		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/theme/league.min.css">
-
-		<!-- Theme used for syntax highlighting of code -->
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/theme/dracula.min.css">
 		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/highlight/monokai.min.css">
         
         <style>
-            .highlight { color: #e74c3c; font-weight: bold; }
-            .success { color: #2ecc71; font-weight: bold; }
-            .info-box { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; font-size: 0.8em; }
-            small { font-size: 0.6em !important; }
+            .highlight { color: #ff79c6; font-weight: bold; }
+            .success { color: #50fa7b; font-weight: bold; }
+            .warning { color: #f1fa8c; font-weight: bold; }
+            .danger { color: #ff5555; font-weight: bold; }
+            .info-box { background: rgba(255,255,255,0.1); padding: 20px; border-radius: 10px; }
+            ul { list-style-type: none; }
+            li { margin-bottom: 15px; }
+            .fragment.visible:not(.current-fragment) { opacity: 0.5; }
         </style>
 	</head>
 	<body>
@@ -26,161 +28,268 @@
 
                 <!-- Slide 1: Title -->
 				<section>
-					<h3>ReDAN: An Empirical Study on Remote DoS Attacks against NAT Networks</h3>
-					<p style="font-size: 0.8em;">NDSS Symposium 2025</p>
+					<h3>ReDAN: Remote DoS Attacks against NAT Networks</h3>
 					<hr>
-					<p style="font-size: 0.6em;">
-						Presented by: [Your Name]<br>
-						Original Authors: Xuewei Feng, Yuxiang Yang, Qi Li, et al.
-					</p>
+					<p style="color: #bd93f9;">NDSS Symposium 2025</p>
+					<p style="font-size: 0.6em;">Feb 2025</p>
+                    
+                    <aside class="notes">
+                        - Welcome everyone.
+                        - Today I am presenting "ReDAN", which stands for Remote DoS Attacks against NAT Networks.
+                        - This paper was published at the NDSS Symposium in February 2025.
+                        - NDSS is one of the "Big 4" top-tier security conferences, so this is very recent and cutting-edge research.
+                    </aside>
 				</section>
 
-                <!-- Slide 2: Introduction -->
+                <!-- Slide 2: Research Question -->
 				<section>
-					<h2>What is NAT?</h2>
-					<ul>
-						<li class="fragment"><strong>Network Address Translation:</strong> Maps private IP addresses to a single public IP.</li>
-						<li class="fragment">Used in 4G/5G, public Wi-Fi, Cloud VPS, and IoT.</li>
-						<li class="fragment">Commonly believed to <span class="success">enhance security</span> by concealing internal hosts.</li>
-						<li class="fragment"><span class="highlight">The Reality:</span> Vulnerabilities in NAT implementations allow remote attackers to disrupt connectivity.</li>
-					</ul>
+					<h2>The Research Question</h2>
+					<blockquote style="border-left: 5px solid #ff79c6; padding-left: 20px; font-size: 1.2em;">
+                        Can an <span class="highlight">off-path attacker</span>... <br>
+                        <span class="fragment">...identify a NAT device?</span><br>
+                        <span class="fragment">...and <span class="danger">terminate</span> its TCP connections?</span>
+                    </blockquote>
+
+                    <aside class="notes">
+                        - The core question of this paper is simple but scary.
+                        - Can an attacker who is NOT on your local network (an off-path attacker)...
+                        - First, identify that you are using a NAT (like a home router or 5G connection)...
+                        - And second, remotely cut off your connections to the internet?
+                        - The answer, as we will see, is "Yes."
+                    </aside>
 				</section>
 
-                <!-- Slide 3: The ReDAN Attack Overview -->
+                <!-- Slide 3: The Hypothesis -->
 				<section>
-					<h2>ReDAN Overview</h2>
-					<p><strong>Re</strong>mote <strong>D</strong>oS <strong>A</strong>ttacks targeting <strong>N</strong>AT</p>
-					<div class="info-box">
-						<ol>
-							<li class="fragment"><strong>Identification:</strong> Distinguish if a public IP belongs to a NAT device or a single host using a PMTUD side-channel.</li>
-							<li class="fragment"><strong>Termination:</strong> Remotely sever active TCP connections by manipulating NAT session mappings.</li>
-						</ol>
-					</div>
-					<p class="fragment" style="font-size: 0.7em;"><em>Key Discovery: Over 92% of real-world NAT networks tested were vulnerable.</em></p>
+					<h2>The Hypothesis</h2>
+                    <div class="info-box">
+					    <ul>
+						    <li class="fragment">1. <strong>RFC Ambiguity:</strong> <br><span style="font-size: 0.7em">PMTUD error handling is not strictly defined.</span></li>
+						    <li class="fragment">2. <strong>Implementation Reality:</strong> <br><span style="font-size: 0.7em">Performance > Security.</span></li>
+                            <li class="fragment">3. <strong>The Result:</strong> <br><span style="font-size: 0.7em; color: #ff5555;">Skipping TCP Sequence Validation.</span></li>
+					    </ul>
+                    </div>
+
+                    <aside class="notes">
+                        - The authors hypothesized two main things:
+                        - First, that the "Path MTU Discovery" protocol (PMTUD) is vague in the official specs (RFCs), creating a loophole we can exploit to find NATs.
+                        - Second, and more importantly: Real-world routers prioritize speed over security.
+                        - They hypothesized that to make routers faster, developers skip expensive checks—specifically, checking the "Sequence Number" on TCP Reset packets.
+                    </aside>
 				</section>
 
-                <!-- Slide 4: Background - PMTUD -->
+                <!-- Slide 4: Phase 1 - Identification -->
 				<section>
-					<h2>Background: PMTUD</h2>
-					<ul>
-						<li><strong>Path MTU Discovery (PMTUD):</strong> Determines the largest packet size allowed on a network path without fragmentation.</li>
-						<li>If a packet is too large, a router sends an <span class="highlight">ICMP "Fragmentation Needed"</span> message.</li>
-						<li>The host then reduces its packet size for that destination.</li>
-					</ul>
+					<h3 class="highlight">Phase 1: The Trap</h3>
+					<p>Identifying the NAT Device</p>
+                    <hr>
+                    <div style="text-align: left; margin-left: 10%;">
+					    <p class="fragment">1. <strong>The Visit:</strong> <span style="font-size: 0.7em">User clicks a link.</span></p>
+					    <p class="fragment">2. <strong>The Probe:</strong> <span style="font-size: 0.7em">ICMP "Frag Needed" (MTU=600).</span></p>
+                        <p class="fragment">3. <strong>The Target:</strong> <span style="font-size: 0.7em">We now have the Public IP.</span></p>
+                    </div>
+
+                    <aside class="notes">
+                        - Let's look at Phase 1: The Trap.
+                        - Step 1, The Visit: A victim (a user behind a NAT) clicks your link. Their browser makes a TCP connection to your Attacker Server (the Vantage Point).
+                        - Step 2, The Probe: Your server sends back an ICMP "Fragmentation Needed" message, lying that the network path only supports a tiny MTU (e.g., 600 bytes).
+                        - Step 3: We have now locked onto the target's Public IP. But is it a NAT or a single computer?
+                    </aside>
 				</section>
 
-                <!-- Slide 5: Step 1 - Identifying NAT Devices -->
+                <!-- Slide 5: The Side Channel Visualized -->
 				<section>
-					<h3>Step 1: Identifying NAT</h3>
-					<p style="font-size: 0.8em;">Exploiting PMTUD Desynchronization</p>
-					<ul>
-						<li class="fragment">The attacker's Vantage Point (VP) tricks a client into lowering its MTU.</li>
-						<li class="fragment">The VP then sends an ICMP Echo (Ping) to the public IP.</li>
-						<li class="fragment"><strong>Separate Host:</strong> Responds with <span class="highlight">fragmented</span> packets (matches its new MTU).</li>
-						<li class="fragment"><strong>NAT Device:</strong> Responds with a <span class="success">standard 1500-byte</span> packet (the gateway's MTU remains unchanged).</li>
-					</ul>
-					<p class="fragment info-box">This side channel allows attackers to pinpoint NAT gateways on the Internet.</p>
+					<h3>The Side Channel</h3>
+					<div style="display: flex; gap: 20px;">
+                        <div class="fragment info-box" style="flex: 1;">
+                            <h5 class="success">Single Host</h5>
+                            <p style="font-size: 0.6em;">Updates own MTU.</p>
+                            <p style="font-size: 0.8em;">Response: <strong>Fragmented</strong></p>
+                        </div>
+                        <div class="fragment info-box" style="flex: 1; border: 2px solid #ff5555;">
+                            <h5 class="danger">NAT Gateway</h5>
+                            <p style="font-size: 0.6em;">Forwards update to client.<br>Does NOT update itself.</p>
+                            <p style="font-size: 0.8em;">Response: <strong>Full Size (1500)</strong></p>
+                        </div>
+                    </div>
+
+                    <aside class="notes">
+                        - This is how we distinguish them.
+                        - If the victim is a Single Host: It updates its own settings. Its next packet will be chopped into 600-byte fragments.
+                        - If the victim is a NAT Gateway: It tells the internal client to update, but the Gateway ITSELF does not update its own interface.
+                        - So when we ping the Gateway, it responds with a full 1500-byte packet.
+                        - The difference between "Fragmented" and "Full Size" reveals the NAT.
+                    </aside>
 				</section>
 
-                <!-- Slide 6: Step 2 - Conducting the DoS -->
+                <!-- Slide 6: Phase 2 - Target Selection -->
 				<section>
-					<h3>Step 2: Severing Connections</h3>
-					<p style="font-size: 0.7em;">Exploiting the lack of RST packet validation</p>
-					<ol>
-						<li class="fragment"><strong>Remove Mappings:</strong> Attacker sends crafted TCP RST packets with <em>guessed</em> ports to the NAT device.</li>
-						<li class="fragment"><strong>Deception:</strong> Many NAT devices remove the session mapping without checking if the sequence number is valid.</li>
-						<li class="fragment"><strong>State Manipulation:</strong> Attacker sends PUSH/ACK packets to the server, causing the server to send valid RSTs to the client.</li>
-						<li class="fragment"><strong>Result:</strong> Connectivity is lost even if the internal client's stack is secure!</li>
-					</ol>
+					<h3 class="highlight">Phase 2: The Target</h3>
+                    <p>Not "The Whole Internet"</p>
+                    <div class="info-box">
+                        <p><strong>NAT Mapping:</strong> 5-Tuple</p>
+                        <p style="font-size: 0.6em; font-family: monospace;">[SrcIP, SrcPort, DstIP, DstPort, Protocol]</p>
+                    </div>
+                    <br>
+                    <p class="fragment warning">We must choose a "Victim Server"</p>
+                    <p class="fragment" style="font-size: 0.7em;">e.g., SSH (22), HTTPS (443), Game Server</p>
+
+                    <aside class="notes">
+                        - Now Phase 2: Choosing the "Victim Server".
+                        - You don't automatically close connections to "all servers." NAT mappings are specific "5-tuples".
+                        - To break a connection, you must target a specific Destination Server.
+                        - For example, you decide to kick everyone behind that NAT off of a specific SSH server, a banking site, or a game server.
+                        - You target the specific port of that service (e.g., Port 22 or 443).
+                    </aside>
 				</section>
 
-                <!-- Slide 7: Experimental Results - Vulnerabilities -->
+                <!-- Slide 7: Phase 3 Step A - The Flood -->
 				<section>
-					<h3>Widespread Vulnerability</h3>
-					<table style="font-size: 0.6em;">
+					<h3 class="highlight">Phase 3 (A): Blind Flood</h3>
+                    <p>Deleting the NAT Mapping</p>
+                    <ul>
+                        <li class="fragment">1. <strong>Spoof IP:</strong> Pretend to be Victim Server.</li>
+                        <li class="fragment">2. <strong>RST Flood:</strong> Target ports 32768–61000.</li>
+                        <li class="fragment">3. <strong>The Flaw:</strong> <span class="danger">No Sequence Check.</span></li>
+                    </ul>
+                    <div class="fragment info-box">
+                        <p style="font-size: 0.8em;">Result: NAT "forgets" the connection.</p>
+                    </div>
+
+                    <aside class="notes">
+                        - Phase 3, Step A: The Blind Flood.
+                        - We need to trick the NAT into deleting the "bridge" between the client and server.
+                        - 1. We spoof our IP to look like the Victim Server.
+                        - 2. We send a flood of TCP RST (Reset) packets. We guess the ports by flooding the common range (32k to 61k).
+                        - 3. The Vulnerability: When the NAT gets these RSTs, it does NOT check the "Sequence Number" because that is computationally expensive.
+                        - It just assumes the server wants to quit, and deletes the mapping.
+                        - Status: The NAT has forgotten the connection, but the Client and Server don't know that yet.
+                    </aside>
+				</section>
+
+                <!-- Slide 8: Phase 3 Step B - The Ghost RST -->
+				<section>
+					<h3 class="highlight">Phase 3 (B): Ghost RST</h3>
+                    <p>Terminating the Server Side</p>
+                    <ol>
+                        <li class="fragment">Attacker sends <strong>PUSH/ACK</strong> (Spoofed).</li>
+                        <li class="fragment">NAT receives it -> <em>"I have no mapping!"</em></li>
+                        <li class="fragment">NAT sends <strong>Valid RST</strong> to Server.</li>
+                    </ol>
+                    <p class="fragment success" style="margin-top: 20px;">Connection Terminated.</p>
+
+                    <aside class="notes">
+                        - Step B: The Ghost RST. We need to kill the connection on the Server side properly.
+                        - 1. Still spoofing, we send a PUSH/ACK packet to the NAT.
+                        - 2. The NAT receives this and says, "I have no record of this connection" (because we deleted it in Step A).
+                        - 3. Following standard TCP rules, the NAT sends an RST back to the real Victim Server.
+                        - Crucially, because the NAT sends it, this RST is perfectly valid. The Victim Server receives it and immediately closes the connection.
+                    </aside>
+				</section>
+
+                <!-- Slide 9: Impact Stats -->
+				<section>
+					<h2>Vulnerability Stats</h2>
+					<table style="font-size: 0.7em;">
 						<thead>
 							<tr>
-								<th>Target Type</th>
-								<th>Tested</th>
-								<th>Vulnerable</th>
+								<th>Network Type</th>
+								<th style="color: #ff5555;">Vulnerable %</th>
 							</tr>
 						</thead>
 						<tbody>
-							<tr>
-								<td>Router Firmware (OpenWrt, etc.)</td>
-								<td>8 types</td>
-								<td>6 (75%)</td>
+							<tr class="fragment">
+								<td>4G LTE</td>
+								<td>100% (52/52)</td>
 							</tr>
-							<tr>
-								<td>Commercial NAT Devices</td>
-								<td>30 models</td>
-								<td>29 (96.7%)</td>
+							<tr class="fragment">
+								<td>5G</td>
+								<td>100% (38/38)</td>
 							</tr>
-							<tr>
-								<td>Real-world NAT Networks</td>
-								<td>180</td>
-								<td>166 (92.2%)</td>
+							<tr class="fragment">
+								<td>Public Wi-Fi</td>
+								<td>~80-87%</td>
+							</tr>
+                            <tr class="fragment">
+								<td>Cloud (AWS/Ali)</td>
+								<td>Mixed</td>
 							</tr>
 						</tbody>
 					</table>
-					<div class="fragment info-box" style="margin-top: 20px;">
-						Affected Vendors: NETGEAR, Linksys, Huawei, TP-Link, Xiaomi, Cisco Meraki, etc.
-					</div>
+                    <p class="fragment highlight" style="margin-top: 20px;">Total: 92% of tested networks.</p>
+
+                    <aside class="notes">
+                        - The scope of this is massive.
+                        - They tested 180 real-world networks.
+                        - 100% of tested 4G and 5G networks were vulnerable.
+                        - Over 80% of Public Wi-Fi networks were vulnerable.
+                        - In total, 92% of all networks tested could be attacked.
+                    </aside>
 				</section>
 
-                <!-- Slide 8: Real-World Impact -->
+                <!-- Slide 10: Scenario Scope -->
 				<section>
-					<h3>Impact on Real Networks</h3>
-					<ul>
-						<li class="fragment"><strong>4G LTE/5G:</strong> 100% of tested 4G and 100% of 5G networks were vulnerable.</li>
-						<li class="fragment"><strong>Public Wi-Fi:</strong> ~80-87% vulnerability rate across Wi-Fi 4, 5, and 6.</li>
-						<li class="fragment"><strong>Cloud Networks:</strong> Vulnerabilities found in ALICLOUD, HUAWEI CLOUDS, and Tencent Cloud.</li>
-						<li class="fragment"><strong>Attack Bandwidth:</strong> Only <span class="highlight">~5.7 Mbps</span> is needed to block all SSH/FTP traffic for a NAT network.</li>
-					</ul>
+					<h2>The "Library" Scenario</h2>
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 20px;">
+                        <div class="info-box" style="flex: 1;">
+                            <h4>Attacker</h4>
+                            <p>Floods Port Range<br>(32768–61000)</p>
+                        </div>
+                        <div style="font-size: 2em;">→</div>
+                        <div class="info-box" style="flex: 1;">
+                            <h4>Victim NAT</h4>
+                            <p>100 Students Connected</p>
+                        </div>
+                    </div>
+                    <p class="fragment danger" style="margin-top: 30px;">All 100 Students Disconnected.</p>
+
+                    <aside class="notes">
+                        - Who is affected?
+                        - One Client vs. All? This is the scary part.
+                        - Because we are flooding the entire ephemeral port range (32k to 61k), we hit EVERY session.
+                        - Example: If 100 students in a library are all connected to a University Portal via one NAT gateway...
+                        - And we launch this attack...
+                        - All 100 students get disconnected simultaneously.
+                    </aside>
 				</section>
 
-                <!-- Slide 9: Ethical Considerations -->
+                <!-- Slide 11: Critique -->
 				<section>
-					<h2>Ethical Considerations</h2>
-					<ul>
-						<li><strong>User Consent:</strong> Vantage points obtained user approval before identification.</li>
-						<li><strong>Non-Intrusive:</strong> Experiments only targeted the researchers' own controlled connections.</li>
-						<li><strong>Responsible Disclosure:</strong> Vulnerabilities reported to IETF and affected vendors (Apple, Microsoft, Linux, etc.).</li>
-						<li><strong>CVEs:</strong> 5 identifiers obtained (e.g., CVE-2023-6534).</li>
-					</ul>
+					<h3>Critique & Shortcomings</h3>
+                    <div style="text-align: left; font-size: 0.7em;">
+                        <p class="fragment"><strong><span class="danger">1. IP Spoofing Required:</span></strong><br>Requires an ISP that allows spoofing (BCP 38 violations).</p>
+                        <p class="fragment"><strong><span class="danger">2. QUIC / UDP:</span></strong><br>Attack targets TCP. Does it work on HTTP/3 (UDP)?</p>
+                        <p class="fragment"><strong><span class="danger">3. Hardware Lifecycle:</span></strong><br>Consumer routers are rarely updated. Vulnerability will persist.</p>
+                        <p class="fragment"><strong><span class="success">4. Why I liked it:</span></strong><br>Testing on real 5G infrastructure is rare and impressive.</p>
+                    </div>
+
+                    <aside class="notes">
+                        - My critique of the paper:
+                        - 1. IP Spoofing: The attack requires spoofing the server's IP. Many secure ISPs block this (Ingress Filtering), so the attacker needs a "dirty" network.
+                        - 2. Protocols: The web is moving to QUIC (UDP). This attack relies on TCP state. They didn't test UDP.
+                        - 3. Reality check: Even if they fix the code, your grandmother's router will never get the update. This vulnerability will live for decades.
+                        - 4. However, I liked that they tested actual 5G networks, which is very difficult to do legally and technically.
+                    </aside>
 				</section>
 
-                <!-- Slide 10: Countermeasures -->
-				<section>
-					<h2>Countermeasures</h2>
-					<div class="fragment">
-						<h4>1. Fix PMTUD Side Channel</h4>
-						<p style="font-size: 0.8em;">NAT devices should synchronize PMTU values with internal clients to prevent information leakage.</p>
-					</div>
-					<div class="fragment">
-						<h4>2. Strict TCP Validation</h4>
-						<p style="font-size: 0.8em;">Enforce sequence number checking for RST packets before removing NAT mappings.</p>
-					</div>
-					<p class="fragment success">Prototype on OpenWrt 22.03 confirmed these fixes work!</p>
-				</section>
-
-                <!-- Slide 11: Conclusion -->
+                <!-- Slide 12: Conclusion -->
 				<section>
 					<h2>Conclusion</h2>
 					<ul>
-						<li class="fragment">NAT is not a "security silver bullet."</li>
-						<li class="fragment">ReDAN exploits fundamental flaws in NAT specifications (PMTUD).</li>
-						<li class="fragment">Attackers can remotely identify and disable entire networks with minimal bandwidth.</li>
-						<li class="fragment">Critical need for updated NAT standards and stricter packet validation.</li>
+						<li class="fragment">NAT is not a firewall.</li>
+						<li class="fragment">Attack requires only <strong>5.7 Mbps</strong>.</li>
+						<li class="fragment"><strong>Fix:</strong> Sync PMTUD & Validate TCP Sequences.</li>
 					</ul>
-				</section>
+                    <hr>
+                    <p>Questions?</p>
 
-                <!-- Slide 12: Q&A -->
-				<section>
-					<h1>Thank You!</h1>
-					<p>Questions?</p>
-					<br>
-					<p style="font-size: 0.5em;">Paper: "ReDAN: An Empirical Study on Remote DoS Attacks against NAT Networks"</p>
+                    <aside class="notes">
+                        - In conclusion:
+                        - NAT is often treated as a security feature, but here it is the vulnerability.
+                        - The attack is highly efficient, requiring only 5.7 Mbps of bandwidth.
+                        - The fix is technically simple (validate sequence numbers), but logistically hard (updating hardware).
+                        - Thank you. Questions?
+                    </aside>
 				</section>
 
 			</div>
@@ -188,12 +297,12 @@
 
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/reveal.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/notes/notes.min.js"></script>
-		<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/markdown/markdown.min.js"></script>
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/reveal.js/4.5.0/plugin/highlight/highlight.min.js"></script>
 		<script>
 			Reveal.initialize({
 				hash: true,
-				plugins: [ RevealMarkdown, RevealHighlight, RevealNotes ]
+                slideNumber: true,
+				plugins: [ RevealHighlight, RevealNotes ]
 			});
 		</script>
 	</body>
