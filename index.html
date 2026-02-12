@@ -253,31 +253,12 @@
                     </aside>
 				</section>
 
-                <!-- Slide 11: Critique -->
-				<section>
-					<h3>Critique & Shortcomings</h3>
-                    <div style="text-align: left; font-size: 0.7em;">
-                        <p class="fragment"><strong><span class="danger">1. IP Spoofing Required:</span></strong><br>Requires an ISP that allows spoofing (BCP 38 violations).</p>
-                        <p class="fragment"><strong><span class="danger">2. QUIC / UDP:</span></strong><br>Attack targets TCP. Does it work on HTTP/3 (UDP)?</p>
-                        <p class="fragment"><strong><span class="danger">3. Hardware Lifecycle:</span></strong><br>Consumer routers are rarely updated. Vulnerability will persist.</p>
-                        <p class="fragment"><strong><span class="success">4. Why I liked it:</span></strong><br>Testing on real 5G infrastructure is rare and impressive.</p>
-                    </div>
-
-                    <aside class="notes">
-                        - My critique of the paper:
-                        - 1. IP Spoofing: The attack requires spoofing the server's IP. Many secure ISPs block this (Ingress Filtering), so the attacker needs a "dirty" network.
-                        - 2. Protocols: The web is moving to QUIC (UDP). This attack relies on TCP state. They didn't test UDP.
-                        - 3. Reality check: Even if they fix the code, your grandmother's router will never get the update. This vulnerability will live for decades.
-                        - 4. However, I liked that they tested actual 5G networks, which is very difficult to do legally and technically.
-                    </aside>
-				</section>
-
                 <!-- Slide 12: Conclusion -->
 				<section>
 					<h2>Conclusion</h2>
 					<ul>
 						<li class="fragment">NAT is not a firewall.</li>
-						<li class="fragment">Attack requires only <strong>5.7 Mbps</strong>.</li>
+						<li class="fragment">Attack requires only <strong>5.7 MBps</strong>.</li>
 						<li class="fragment"><strong>Fix:</strong> Sync PMTUD & Validate TCP Sequences.</li>
 					</ul>
                     <hr>
@@ -286,7 +267,7 @@
                     <aside class="notes">
                         - In conclusion:
                         - NAT is often treated as a security feature, but here it is the vulnerability.
-                        - The attack is highly efficient, requiring only 5.7 Mbps of bandwidth.
+                        - The attack is highly efficient, requiring only 5.7 MBps of bandwidth.
                         - The fix is technically simple (validate sequence numbers), but logistically hard (updating hardware).
                         - Thank you. Questions?
                     </aside>
